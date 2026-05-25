@@ -1,0 +1,71 @@
+_format_version: "3.0"
+
+consumers:
+  - username: petshop-frontend
+
+jwt_secrets:
+  - consumer: petshop-frontend
+    key: "petshop-auth"
+    algorithm: RS256
+    rsa_public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt4Rx6no+NyqA1VTRi7DX
+      WiraTNr+GJ2RK5WPp6qbQ2AMb+IcgJDkOHAkc+6mOiQXHeKwHQweudg6cI2URT1X
+      hOrMQe2wSqToRpndHU0GD9+DBsg6Q52Ap+hy5cOJ1LACYGoeCkIOcZUyk15jgnO+
+      Xw+o3fYkv3r79U4fwvA/cNGzHJESuaopKcX2XgHLIJ6ytODZfFjAPeofXa+XphLO
+      olX4aRsuJ/6xfGs4USA6/LKcLrG6Z1CF7XTE72gmBtWMRWCrT/A5m0B1iMQKOMoQ
+      CS46ZCY9rX7+jd0NDvr+2m+LMCAj4qZYfovfscmIJ0pcoY2hKHrdm+0b4DhvQphV
+      YwIDAQAB
+      -----END PUBLIC KEY-----
+
+services:
+  - name: auth-service
+    url: http://petshop-auth-service:8080
+    routes:
+      - name: auth-routes
+        paths:
+          - /api/auth
+        strip_path: false
+
+  - name: registration-service
+    url: http://petshop-registration-service:8080
+    routes:
+      - name: registration-routes
+        paths:
+          - /api/clients
+          - /api/animals
+        strip_path: false
+    plugins:
+      - name: jwt
+        config:
+          claims_to_verify:
+            - exp
+          key_claim_name: iss
+
+  - name: appointment-service
+    url: http://petshop-appointment-service:8080
+    routes:
+      - name: appointment-routes
+        paths:
+          - /api/appointments
+        strip_path: false
+    plugins:
+      - name: jwt
+        config:
+          claims_to_verify:
+            - exp
+          key_claim_name: iss
+
+  - name: query-service
+    url: http://petshop-query-service:8080
+    routes:
+      - name: query-routes
+        paths:
+          - /api/query
+        strip_path: false
+    plugins:
+      - name: jwt
+        config:
+          claims_to_verify:
+            - exp
+          key_claim_name: iss

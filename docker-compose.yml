@@ -1,0 +1,54 @@
+version: "3.8"
+
+services:
+  kong:
+    image: kong:3.4.0
+    container_name: kong-api-gateway
+    environment:
+      - KONG_DATABASE=off
+      - KONG_DECLARATIVE_CONFIG=/kong/declarative/kong.yml
+      - KONG_PROXY_ACCESS_LOG=/dev/stdout
+      - KONG_ADMIN_ACCESS_LOG=/dev/stdout
+      - KONG_PROXY_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_ERROR_LOG=/dev/stderr
+      - KONG_ADMIN_LISTEN=0.0.0.0:8001
+    volumes:
+      - ./.kong/kong.yml:/kong/declarative/kong.yml
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+    networks:
+      - petshop-network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: petshop-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - petshop-network
+
+  postgres:
+    image: postgres:15
+    container_name: petshop-postgres
+    environment:
+      - POSTGRES_USER=petshop
+      - POSTGRES_PASSWORD=petshop
+      - POSTGRES_DB=petshop_db
+    ports:
+      - "5432:5432"
+    networks:
+      - petshop-network
+
+  mongodb:
+    image: mongo:6
+    container_name: petshop-mongodb
+    ports:
+      - "27017:27017"
+    networks:
+      - petshop-network
+
+networks:
+  petshop-network:
+    driver: bridge
