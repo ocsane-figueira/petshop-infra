@@ -20,7 +20,7 @@ jwt_secrets:
 
 services:
   - name: auth-service
-    url: https://petshop-auth-service.onrender.com
+    url: http://host.docker.internal:8080
     routes:
       - name: auth-routes
         paths:
@@ -28,7 +28,7 @@ services:
         strip_path: false
 
   - name: registration-service
-    url: https://petshop-registration-service.onrender.com
+    url: http://host.docker.internal:8081
     routes:
       - name: registration-routes
         paths:
@@ -43,7 +43,7 @@ services:
           key_claim_name: iss
 
   - name: appointment-service
-    url: https://petshop-appointment-service.onrender.com
+    url: http://host.docker.internal:8082
     routes:
       - name: appointment-routes
         paths:
@@ -57,7 +57,7 @@ services:
           key_claim_name: iss
 
   - name: query-service
-    url: https://petshop-query-service.onrender.com
+    url: http://host.docker.internal:8083
     routes:
       - name: query-routes
         paths:

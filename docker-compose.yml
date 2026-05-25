@@ -13,7 +13,7 @@ services:
       - KONG_ADMIN_ERROR_LOG=/dev/stderr
       - KONG_ADMIN_LISTEN=0.0.0.0:8001
     volumes:
-      - ./.kong/kong.yml:/kong/declarative/kong.yml
+      - ./.kong/kong-local.yml:/kong/declarative/kong.yml
     ports:
       - "8000:8000"
       - "8001:8001"
