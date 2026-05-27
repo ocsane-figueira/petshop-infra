@@ -4,9 +4,9 @@ USER root
 RUN mkdir -p /kong/declarative && chown -R kong:kong /kong/declarative
 
 COPY .kong/kong.yml /kong/declarative/kong.yml
+COPY .kong/kong-dev.yml /kong/declarative/kong-dev.yml
 
 ENV KONG_DATABASE=off
-ENV KONG_DECLARATIVE_CONFIG=/kong/declarative/kong.yml
 
 # --- CONFIGURAÇÕES DE OTIMIZAÇÃO PARA O RENDER (Limitar RAM) ---
 ENV KONG_NGINX_WORKER_PROCESSES=1
