@@ -72,3 +72,10 @@ services:
           claims_to_verify:
             - exp
           key_claim_name: iss
+
+  - name: kong-metrics
+    url: http://localhost:8001/metrics
+    routes:
+      - name: metrics-route
+        paths:
+          - /metrics
