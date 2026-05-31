@@ -1,164 +1,257 @@
-# 🐾 Petshop Microservices Architecture
+# 🐾 Petshop Distributed System — Arquitetura Global e Infraestrutura
 
-Bem-vindo ao projeto do Petshop distribuído! Este repositório contém a implementação de uma arquitetura de Microsserviços.
+Bem-vindo à documentação central da arquitetura distribuída do **Petshop**! Este repositório (`petshop-infra`) serve como o **hub central de infraestrutura** e o manual operacional global do ecossistema. 
 
-O projeto foi construído utilizando **Java 21**, **Quarkus**, **CQRS (Command Query Responsibility Segregation)**, e **Clean Architecture**, sendo orquestrado via Docker.
-
----
-
-## 🎯 Objetivo do Projeto
-
-Demonstrar na prática os conceitos avançados de sistemas distribuídos:
-1. **Desacoplamento Extremo:** Microsserviços que não compartilham o mesmo banco de dados.
-2. **Arquitetura Orientada a Eventos:** Comunicação assíncrona utilizando RabbitMQ.
-3. **CQRS:** Separação entre a base de "Escrita" (Command) e a base de "Leitura" (Query).
-4. **API Gateway:** Centralização de chamadas e validação de segurança, utilizando Kong.
-5. **Containerização "All-in-One":** Capacidade de iniciar todo o ecossistema com um único comando Docker, sem necessidade de dependências locais nas máquinas (Maven ou Java).
+Anteriormente estruturado como um monolito dockerizado local, o projeto foi completamente refatorado em um ecossistema **Multirrepo de Microsserviços**, com pipelines modernos de **CI/CD** automatizados e **Observabilidade centralizada** na nuvem.
 
 ---
 
-## 🏗️ Ecossistema de Microsserviços
+## 🏗️ Evolução da Arquitetura: Monolito ➡️ Multirrepo
 
-O projeto é dividido nos seguintes componentes:
+A transição para multirrepo teve como objetivos principais:
+1. **Desacoplamento Extremo**: Ciclos de desenvolvimento e de entrega completamente independentes.
+2. **Escalabilidade Isolada**: Serviços críticos de escrita ou leitura podem ser escalados de forma independente.
+3. **Segregação Física de Dados**: Nenhuma base de dados é compartilhada diretamente entre microsserviços.
+4. **Resiliência Arquitetural**: Falhas em um microsserviço de escrita não impedem a leitura ou a autenticação de funcionar.
 
-1. **`auth-service` (Porta 8081)**
-   * **Papel**: Responsável pela autenticação.
-   * **Tecnologia**: Quarkus SmallRye JWT. Gera tokens assinados via RSA (Pares de Chaves Pública/Privada).
+### Diagrama de Fluxo e Componentes Globais
 
-2. **`registration-service` (Porta 8082)**
-   * **Papel**: Lado *Command* (Escrita) do CQRS para Entidades Base.
-   * **Responsabilidade**: Cadastrar Clientes e Animais, aplicando validações essenciais (ex: impedir CPF duplicado).
-   * **Banco de Dados**: PostgreSQL.
-   * **Mensageria**: Emite eventos `ClientCreatedEvent` e `AnimalCreatedEvent` para o RabbitMQ após sucesso no banco.
+O ecossistema é orquestrado sob o padrão **CQRS** (Command Query Responsibility Segregation) assíncrono mediado por eventos:
 
-3. **`appointment-service` (Porta 8083)**
-   * **Papel**: Lado *Command* (Escrita) para Agendamentos.
-   * **Responsabilidade**: Validar disponibilidade de agenda. Garante que não haja sobreposição de horários de forma global na loja e que um mesmo animal não possua mais de um agendamento futuro ativo.
-   * **Banco de Dados**: PostgreSQL.
-   * **Mensageria**: Emite o evento `AppointmentScheduledEvent`.
+```mermaid
+flowchart TD
+    Client((Cliente / API Consumer)) -->|HTTP Request| Gateway[Kong API Gateway]
+    
+    subgraph Gateway Routing
+        Gateway -->|/api/auth/*| AuthSvc[auth-service]
+        Gateway -->|/api/clients/* & /api/animals/*| RegSvc[registration-service]
+        Gateway -->|/api/appointments/*| ApptSvc[appointment-service]
+        Gateway -->|/api/query/*| QuerySvc[query-service]
+    end
 
-4. **`query-service` (Porta 8084)**
-   * **Papel**: Lado *Query* (Leitura) do CQRS.
-   * **Responsabilidade**: "Escutar" constantemente as filas do RabbitMQ. Quando eventos chegam, ele constrói e salva "Views" ricas (Desnormalizadas). Exemplo: Junta os dados do Agendamento + Nome do Animal + Nome do Cliente.
-   * **Banco de Dados**: MongoDB (NoSQL, focado em leitura rápida e documentos aninhados).
+    subgraph Write Domain (Commands)
+        RegSvc -->|PostgreSQL Schema: registration_db| DB_Reg[(PostgreSQL)]
+        ApptSvc -->|PostgreSQL Schema: appointment_db| DB_Appt[(PostgreSQL)]
+    end
 
-5. **Infraestrutura Extra**
-   * **Kong API Gateway (DB-less)**: Porta 8000.
-   * **RabbitMQ**: Message Broker (Porta 5672).
-   * **Bancos**: PostgreSQL (5432) e MongoDB (27017).
+    subgraph Event Broker
+        RegSvc -->|Publish Event| RabbitMQ{RabbitMQ Message Broker}
+        ApptSvc -->|Publish Event| RabbitMQ
+    end
 
----
+    subgraph Read Domain (Queries)
+        RabbitMQ -->|Consume Event| QuerySvc
+        QuerySvc -->|MongoDB Collection: views| DB_Query[(MongoDB NoSQL)]
+    end
 
-## 🧠 Decisões Arquiteturais e o "Por Quê"
-
-Durante o desenvolvimento, as seguintes decisões foram consideradas:
-
-### 1. Ausência de Chaves Estrangeiras (Foreign Keys) entre Serviços
-**Decisão:** O `appointment-service` armazena apenas um `Long animalId`, sem ter uma tabela de animais física atrelada.
-**Por quê?** Essa decisão é fundamental nos microsserviços. Se um serviço falhar ou mudar de banco, o outro não pode quebrar. Os dados são ligados apenas logicamente.
-
-### 2. Tratamento Global de Exceções (`BusinessExceptionHandler`)
-**Decisão:** Usamos `@Provider` para capturar exceções de negócio customizadas (como `TimeOverlapException`).
-**Por quê?** Para evitar misturar lógica HTTP dentro da camada de Serviço (Clean Architecture). O serviço apenas lança a exceção Java, e o Handler transforma isso automaticamente em um JSON amigável com HTTP 400 ou 409 (Conflict).
-
-### 3. Padrão Multi-stage no Dockerfile
-**Decisão:** Os microsserviços são compilados por um Maven dentro do próprio Docker, e depois o binário é transferido para uma imagem JRE vazia.
-**Por quê?** Para atender o requisito de ter um `docker-compose` integrado e isolado. O professor/avaliador não precisa ter Java 21 ou Maven instalado; basta dar `docker-compose up` e a aplicação inteira será construída e ligada a partir do zero.
-
-### 4. Estratégia do MongoDB Desnormalizado no CQRS
-**Decisão:** O `query-service` monta um `AppointmentViewDocument` que já possui os nomes formatados do Animal e do Cliente.
-**Por quê?** Para performance de leitura (Dashboard). Quando o Frontend pede os agendamentos do dia, o MongoDB não faz nenhuma operação pesada de `JOIN`, ele entrega o dado em custo computacional `O(1)`.
+    subgraph Observabilidade
+        Prometheus[Prometheus Scraper] -->|Scrape /q/metrics| AuthSvc
+        Prometheus -->|Scrape /q/metrics| RegSvc
+        Prometheus -->|Scrape /q/metrics| ApptSvc
+        Prometheus -->|Scrape /q/metrics| QuerySvc
+        Prometheus -->|Remote Write / Basic Auth| Grafana[Grafana Cloud Dashboard]
+    end
+```
 
 ---
 
-## 🚀 Como Rodar o Projeto
+## 🗂️ Inventário de Repositórios e Serviços
 
-É necessário possuir o **Docker** e o **Docker Compose** instalados na sua máquina.
+O ecossistema é composto por **5 repositórios independentes**:
 
-1. Abra o terminal na raiz do projeto (onde está o `docker-compose.yml`).
-2. Execute o comando:
+1. **[petshop-infra]** *(Este Repositório)*
+   * **Papel**: Centralização de infraestrutura local (Docker Compose), gateway de desenvolvimento (Kong) e templates de coleta de métricas (Prometheus).
+   * **Hospedagem Render**: `petshop-infra` (Prod) & `petshop-infra-dev` (Dev) — Kong DB-less.
+
+2. **[petshop-auth-service]**
+   * **Papel**: Autenticação e Emissão de Tokens JWT auto-contidos com criptografia RSA (Pares de chaves pública e privada).
+   * **Porta Local**: `8081` | **Hospedagem Render**: `petshop-auth-service` & `petshop-auth-service-dev`.
+
+3. **[petshop-registration-service]**
+   * **Papel**: Domínio de Escrita (*Command*) de Clientes e Animais.
+   * **Tecnologias**: Quarkus, Hibernate ORM com Panache, PostgreSQL.
+   * **Mensageria**: Emite `ClientCreatedEvent` e `AnimalCreatedEvent` para as exchanges do RabbitMQ.
+   * **Porta Local**: `8082` | **Hospedagem Render**: `petshop-registration-service` & `petshop-registration-service-dev`.
+
+4. **[petshop-appointment-service]**
+   * **Papel**: Domínio de Escrita (*Command*) de Agendamentos. Contém regras rígidas de validação de negócios (sobreposição de horário global de loja, unicidade de agendamento futuro ativo por pet).
+   * **Tecnologias**: Quarkus, PostgreSQL.
+   * **Mensageria**: Emite `AppointmentScheduledEvent` e `AppointmentCancelledEvent` para o RabbitMQ.
+   * **Porta Local**: `8083` | **Hospedagem Render**: `petshop-appointment-service` & `petshop-appointment-service-dev`.
+
+5. **[petshop-query-service]**
+   * **Papel**: Domínio de Leitura (*Query*). Consome em tempo real os eventos das filas do RabbitMQ e consolida Views desnormalizadas e ricas para consultas de alta performance instantânea.
+   * **Tecnologias**: Quarkus, MongoDB (NoSQL ideal para armazenamento de estruturas de documentos aninhadas).
+   * **Porta Local**: `8084` | **Hospedagem Render**: `petshop-query-service` & `petshop-query-service-dev`.
+
+---
+
+## 🚀 Análise Técnica de CI/CD (Integração e Entrega Contínua)
+
+Cada repositório de microsserviço possui uma estrutura moderna e automatizada de pipelines construída no GitHub Actions:
+
+```
+[Push/PR] ➡️ [CI Pipeline] ➡️ [SonarCloud Analysis] ➡️ [Docker Hub Build & Push (main)] ➡️ [CD Pipeline (Trigger)] ➡️ [Render Deploy Webhooks]
+```
+
+### 1. Fluxo de Continuous Integration (CI)
+* **Gatilho**: Qualquer `push` ou `pull_request` nas branches `main` e `develop`.
+* **Ambiente**: Máquina virtual Ubuntu executando JDK 21 (Temurin) com cache inteligente do Maven habilitado.
+* **Validação**: Execução completa dos testes automatizados via `mvn clean verify`.
+* **Análise de Qualidade (SonarCloud)**: Integração profunda com o SonarCloud para análise estática e controle de cobertura de código (Project Key: `ocsane-figueira_petshop-<servico>`).
+
+### 2. Versionamento e Liberação Automatizada (Semantic Release)
+* Executado exclusivamente na branch `main` após sucesso no pipeline de CI.
+* Utiliza a especificação de **Conventional Commits** para analisar mensagens de commit, calcular automaticamente o próximo incremento SemVer (Patch, Minor ou Major), gerar notas de release e criar tags de versão correspondentes diretamente no GitHub.
+
+### 3. Publicação de Artefatos no Docker Hub
+* Após o sucesso dos testes em `main`, o pipeline de CI executa o login seguro no Docker Hub (`username: ocsane`).
+* Monta a imagem final baseada no arquivo multi-stage da aplicação e realiza o push automático da nova imagem com tags do hash SHA curto do Git e a tag `main` (`ocsane/petshop-<service-name>`).
+
+### 4. Continuous Deployment (CD) Decoupled
+* Para evitar acoplamento no pipeline de testes, criamos um fluxo reativo usando a feature `workflow_run` do GitHub Actions.
+* O arquivo `cd.yml` escuta a conclusão do workflow `CI Pipeline`. Caso seja bem-sucedido:
+  * Se a branch de origem for `develop`: Executa uma chamada REST segura via `curl` para o **Webhook de Deploy Dev** do Render (`RENDER_DEPLOY_HOOK_DEV`). A infraestrutura correspondente `-dev` no Render puxará o código atualizado e realizará o build automaticamente.
+  * Se a branch de origem for `main`: Dispara o deploy de Homologação/Produção no Render usando o webhook principal (`RENDER_DEPLOY_HOOK`).
+
+---
+
+## 📊 Análise da Arquitetura de Observabilidade
+
+Para monitorar os microsserviços sem sobrecarregar a infraestrutura limitada, projetamos uma coleta híbrida com envio centralizado de métricas:
+
+### 1. Exposição de Métricas nos Microsserviços
+Cada microsserviço Java foi equipado com a extensão **Quarkus Micrometer** e o registro do Prometheus.
+* **Endpoint**: `/q/metrics` expõe em formato aberto métricas detalhadas da JVM (Heap, CPU, GC, Threads) e da camada HTTP/Bancos de Dados.
+* **API Gateway (Kong)**: Expõe no endpoint `/metrics` latências de tráfego, contagens de requisições por rota e códigos HTTP.
+
+### 2. Prometheus Collector (Hospedado no Render)
+O serviço `petshop-infra-prometheus` roda o container oficial do Prometheus com uma estratégia leve:
+* **Finalidade**: O Prometheus não armazena os dados localmente em volumes pesados na nuvem. Ele atua como um **agente coletor reativo**.
+* **Templates Dinâmicos**: O arquivo [prometheus.yml](file:///c:/Users/willi/Documents/Devops%20oc/petshop/infra/prometheus/prometheus.yml) possui seções declarativas separadas para coletar dados dos targets de **DEV** (`*-dev.onrender.com`) e **HOMOL/PROD** (`*.onrender.com`).
+* **Segurança de Segredos**: O `Dockerfile` do Prometheus injeta a variável de ambiente secreta `${GRAFANA_TOKEN}` em tempo de execução via comando `sed` sobre um arquivo de template, mantendo credenciais seguras fora do controle de versão.
+
+### 3. Grafana Cloud Integration (Push Telemetry)
+* **Mecanismo**: Através da diretiva `remote_write` no arquivo de configuração do Prometheus, todas as métricas raspadas a cada 60 segundos dos microsserviços em nuvem são enviadas via protocolo de streaming compactado HTTP/Snappy direto para o endpoint central da nossa conta no **Grafana Cloud**:
+  * **Destino**: `https://prometheus-prod-40-prod-sa-east-1.grafana.net/api/prom/push`
+  * **Autenticação**: ID de Usuário `3255140` + Token Seguro de Gravação.
+* **Resultado**: Dashboards visuais premium e de altíssima performance no Grafana Cloud, com consumo zero de disco nos servidores do Render.
+
+---
+
+## 🛠️ Como Iniciar a Infraestrutura de Suporte Local
+
+Se você deseja desenvolver ou testar microsserviços localmente, não precisa instalar bancos ou filas na sua máquina. O repositório de infraestrutura provê um ambiente completo com Kong, PostgreSQL, MongoDB e RabbitMQ prontos para rodar.
+
+### Requisitos
+* Docker
+* Docker Compose
+
+### Instruções de Execução
+
+1. Navegue até a pasta `infra` deste repositório.
+2. Execute o comando para subir todos os contêineres compartilhados:
    ```bash
-   docker-compose up --build -d
+   docker compose up -d
    ```
-3. Aguarde (a primeira execução fará o download da internet das imagens e bibliotecas do Maven).
-4. Verifique no painel do seu Docker Desktop (ou usando `docker ps`) se todos os contêineres subiram.
+3. Os recursos estarão disponíveis nas seguintes portas locais:
+   * **Kong API Gateway**: `http://localhost:8000`
+   * **PostgreSQL (Databases de Escrita)**: `localhost:5432` (Credenciais: `petshop` / `petshop`)
+   * **MongoDB (Leitura CQRS)**: `localhost:27017`
+   * **RabbitMQ Message Broker**: `localhost:5672` (Painel de gerenciamento em `http://localhost:15672`)
 
 ---
 
-## 🧪 Como Testar o Fluxo (Passo-a-Passo)
+## 🧪 Roteiro de Teste End-to-End (E2E) via API Gateway
 
-Recomendamos usar o Postman ou Insomnia para testar os endpoints REST.
+Você pode testar todo o fluxo CQRS distribuído disparando as chamadas de API através do gateway Kong configurado. O mesmo roteiro de testes pode ser executado localmente ou nas nuvens do Render, bastando alterar a **URL base** das requisições.
 
-1. **Gere o Token (Auth Service)**
-   * Faça um `POST` em `http://localhost:8000/api/auth/login` (Corpo JSON: `{"username": "admin", "password": "admin123"}`). Copie o Token JWT retornado
+### 🌐 Ambientes Disponíveis e URLs Base
 
-2. **Crie um Cliente (Registration Service)**
-   * Faça um `POST` em `http://localhost:8000/api/clients`
-   * Corpo: `{"name": "Ocsane Figueira", "cpf": "12345678900", "email": "ocsane@gmail.com", "phone": "47999999999"}`
-   * *Imediatamente após retornar 201 Created, um evento entrará em uma fila no RabbitMQ.*
+Para facilitar os testes em ferramentas como **Postman** ou **Insomnia**, configure uma variável global de ambiente `{{BASE_URL}}` utilizando uma das URLs abaixo:
 
-3. **Crie um Animal (Registration Service)**
-   * Faça um `POST` em `http://localhost:8000/api/animals`
-   * Corpo: `{"name": "Zeus", "species": "Cachorro", "breed": "Dachshund", "clientId": 1}`
+| Ambiente | Descrição | URL Base (`{{BASE_URL}}`) |
+| :--- | :--- | :--- |
+| **Local** | Executando via Docker Compose local | `http://localhost:8000` |
+| **Desenvolvimento (DEV)** | Ambiente integrado Dev no Render | `https://petshop-infra-dev.onrender.com` |
+| **Homologação/Produção (PROD)** | Ambiente estável de produção no Render | `https://petshop-infra.onrender.com` |
 
-4. **Agende um Serviço (Appointment Service)**
-   * Faça um `POST` em `http://localhost:8000/api/appointments`
-   * Corpo:
-     ```json
-     {
-       "animalId": 1,
-       "type": "BANHO",
-       "startTime": "2026-05-10T14:00:00",
-       "endTime": "2026-05-10T15:00:00"
-     }
-     ```
-
-5. **A Prova do CQRS (Query Service)**
-   * Agora o teste de fogo: Faça um `GET` no painel de leitura ultra-rápida.
-   * `GET http://localhost:8000/api/query/appointments`
-   * **Resultado esperado:** O MongoDB vai te devolver o agendamento completo, incluindo as chaves `animalName: "Rex"` e `clientName: "João"`, mesmo que o MongoDB nunca tenha falado diretamente com o Postgres, pois foi tudo sincronizado de forma reativa pelo RabbitMQ.
-
-6. **Consultar Clientes Sincronizados (Query Service)**
-   * Faça um `GET` em `http://localhost:8000/api/query/clients`
-   * **Resultado esperado:** Retornará a lista de clientes (ex: "João") lida de forma rápida do MongoDB.
-
-7. **Cancelar um Agendamento (Appointment Service)**
-   * Faça um `DELETE` em `http://localhost:8000/api/appointments/1` (substitua `1` pelo ID gerado).
-   * **A mágica continua:** O evento de cancelamento será processado pelo RabbitMQ. Se você refazer o passo 5, verá que a View do agendamento foi removida do MongoDB de forma automática.
 ---
 
-## 🧪 Testes Unitários e Cobertura (Jacoco)
+### 1. Autenticação (Geração de JWT)
+* **Método**: `POST`
+* **URL**: `{{BASE_URL}}/api/auth/login`
+* **JSON Request**:
+  ```json
+  {
+    "username": "admin",
+    "password": "admin123"
+  }
+  ```
+* **Resposta Esperada (200 OK)**: Retornará um Token JWT. Copie este token e configure-o como cabeçalho `Authorization: Bearer <TOKEN>` (ou do tipo *Bearer Token* na aba Auth do Postman) para as próximas chamadas.
 
-O projeto utiliza **JUnit 5**, **Mockito** e **RestAssured** para garantir a qualidade do código. A cobertura é monitorada via **Jacoco**, com uma meta mínima estabelecida de **50%**.
+### 2. Cadastro de Cliente (registration-service)
+* **Método**: `POST`
+* **URL**: `{{BASE_URL}}/api/clients`
+* **Headers**: `Authorization: Bearer <TOKEN>`
+* **JSON Request**:
+  ```json
+  {
+    "name": "Ocsane Figueira",
+    "cpf": "12345678900",
+    "email": "ocsane@gmail.com",
+    "phone": "47999999999"
+  }
+  ```
+* **Resposta Esperada (201 Created)**: Retorna a confirmação de criação do cliente com o ID (ex: `1`). *Neste instante, um evento `ClientCreatedEvent` é publicado no RabbitMQ e consumido pelo `query-service`*.
 
-### Como Rodar os Testes
+### 3. Cadastro de Animal (registration-service)
+* **Método**: `POST`
+* **URL**: `{{BASE_URL}}/api/animals`
+* **Headers**: `Authorization: Bearer <TOKEN>`
+* **JSON Request**:
+  ```json
+  {
+    "name": "Zeus",
+    "species": "Cachorro",
+    "breed": "Dachshund",
+    "clientId": 1
+  }
+  ```
+* **Resposta Esperada (201 Created)**: Retorna o animal registrado associado ao cliente ID. *Neste instante, um evento `AnimalCreatedEvent` é publicado no RabbitMQ*.
 
-Os testes devem ser executados individualmente para cada microsserviço:
-Execute os testes usando o seguinte comando:
-```bash
-./mvnw clean verify -f [nome-do-servico]/pom.xml
-```
+### 4. Agendamento de Serviço (appointment-service)
+* **Método**: `POST`
+* **URL**: `{{BASE_URL}}/api/appointments`
+* **Headers**: `Authorization: Bearer <TOKEN>`
+* **JSON Request**:
+  ```json
+  {
+    "animalId": 1,
+    "type": "BANHO",
+    "startTime": "2026-05-10T14:00:00",
+    "endTime": "2026-05-10T15:00:00"
+  }
+  ```
+* **Resposta Esperada (201 Created)**: Cria o agendamento caso não existam sobreposições no calendário geral. *Neste instante, um evento `AppointmentScheduledEvent` é publicado e ouvido de forma assíncrona pelo `query-service`*.
 
-### ⚠️ Observação para os Testes Locais
-
-Para executar os testes automatizados dos microsserviços **`appointment-service`** e **`registration-service`** localmente (fora do ambiente Docker), é necessário realizar um pequeno ajuste na configuração para que o Quarkus utilize o banco de testes em memória (Testcontainers).
-
-**Passo a passo:**
-
-1. Navegue até o diretório do serviço desejado.
-2. Abra o arquivo de propriedades: `src/main/resources/application.properties`.
-3. Comente a linha de configuração da URL do banco de dados principal (adicionando um `#` no início da linha).
-   > **Exemplo:** Comente a linha `quarkus.datasource.jdbc.url=...` (localizada na linha 5).
-4. Em seguida, execute o comando de verificação na raiz do projeto:
-
-```bash
-./mvnw clean verify -f <nome-do-servico>/pom.xml
-```
-
-### Como Visualizar os Resultados de Cobertura
-
-Após a execução dos testes, o Quarkus e o Jacoco geram um relatório visual em HTML:
-
-1. O relatório estará em: `[nome-do-servico]/target/jacoco-report/index.html`
-2. Localize esse arquivo no seu explorador de arquivos.
-3. Abra-o no navegador (Chrome, Edge, Firefox, etc.) para ver os detalhes de cobertura por classe e método.
+### 5. Validação CQRS - Consulta de Agendamentos Consolidados (query-service)
+* **Método**: `GET`
+* **URL**: `{{BASE_URL}}/api/query/appointments`
+* **Headers**: `Authorization: Bearer <TOKEN>`
+* **Resposta Esperada (200 OK)**: O `query-service` retorna de maneira instantânea e sem `JOIN` de banco relacional o agendamento completo e consolidado.
+* **Exemplo de Retorno Desnormalizado**:
+  ```json
+  [
+    {
+      "id": 1,
+      "animalId": 1,
+      "animalName": "Zeus",
+      "clientName": "Ocsane Figueira",
+      "type": "BANHO",
+      "startTime": "2026-05-10T14:00:00",
+      "endTime": "2026-05-10T15:00:00"
+    }
+  ]
+  ```
+  *(Isso prova o sucesso da sincronização via RabbitMQ e a robustez do padrão CQRS!)*
