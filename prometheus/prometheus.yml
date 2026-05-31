@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 60s
+remote_write:
+  - url: https://prometheus-prod-40-prod-sa-east-1.grafana.net/api/prom/push
+    basic_auth:
+      username: ${GRAFANA_USER}
+      password: ${GRAFANA_TOKEN}
+scrape_configs:
+  # --- AMBIENTE DEV ---
+  - job_name: 'auth-service-dev'
+    metrics_path: '/q/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['petshop-auth-service-dev.onrender.com']
+
+  # --- AMBIENTE HOMOL/PROD ---
+  - job_name: 'auth-service-homol'
+    metrics_path: '/q/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['petshop-auth-service.onrender.com']
