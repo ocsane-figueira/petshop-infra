@@ -42,7 +42,7 @@ scrape_configs:
     metrics_path: '/metrics'
     scheme: 'https'
     static_configs:
-      - targets: ['petshop-infra-service.onrender.com']
+      - targets: ['petshop-infra.onrender.com']
 
   - job_name: 'auth-service'
     metrics_path: '/q/metrics'
