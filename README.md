@@ -22,29 +22,29 @@ O ecossistema é orquestrado sob o padrão **CQRS** (Command Query Responsibilit
 flowchart TD
     Client((Cliente / API Consumer)) -->|HTTP Request| Gateway[Kong API Gateway]
     
-    subgraph Gateway Routing
+    subgraph GatewayRouting["Gateway Routing"]
         Gateway -->|/api/auth/*| AuthSvc[auth-service]
         Gateway -->|/api/clients/* & /api/animals/*| RegSvc[registration-service]
         Gateway -->|/api/appointments/*| ApptSvc[appointment-service]
         Gateway -->|/api/query/*| QuerySvc[query-service]
     end
 
-    subgraph Write Domain (Commands)
+    subgraph WriteDomain["Write Domain (Commands)"]
         RegSvc -->|PostgreSQL Schema: registration_db| DB_Reg[(PostgreSQL)]
         ApptSvc -->|PostgreSQL Schema: appointment_db| DB_Appt[(PostgreSQL)]
     end
 
-    subgraph Event Broker
+    subgraph EventBroker["Event Broker"]
         RegSvc -->|Publish Event| RabbitMQ{RabbitMQ Message Broker}
         ApptSvc -->|Publish Event| RabbitMQ
     end
 
-    subgraph Read Domain (Queries)
+    subgraph ReadDomain["Read Domain (Queries)"]
         RabbitMQ -->|Consume Event| QuerySvc
         QuerySvc -->|MongoDB Collection: views| DB_Query[(MongoDB NoSQL)]
     end
 
-    subgraph Observabilidade
+    subgraph Observabilidade["Observabilidade"]
         Prometheus[Prometheus Scraper] -->|Scrape /q/metrics| AuthSvc
         Prometheus -->|Scrape /q/metrics| RegSvc
         Prometheus -->|Scrape /q/metrics| ApptSvc
