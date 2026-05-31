@@ -8,14 +8,62 @@ remote_write:
 scrape_configs:
   # --- AMBIENTE DEV ---
   - job_name: 'infra-service-dev'
-    metrics_path: '/q/metrics'
+    metrics_path: '/metrics'
     scheme: 'https'
     static_configs:
       - targets: ['petshop-infra-dev.onrender.com']
 
-  # --- AMBIENTE HOMOL/PROD ---
-  - job_name: 'infra-service'
+  - job_name: 'auth-service-dev'
     metrics_path: '/q/metrics'
     scheme: 'https'
     static_configs:
+      - targets: ['petshop-auth-service-dev.onrender.com']
+
+  - job_name: 'registration-service-dev'
+    metrics_path: '/q/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['petshop-registration-service-dev.onrender.com']
+
+  - job_name: 'appointment-service-dev'
+    metrics_path: '/q/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['petshop-appointment-service-dev.onrender.com']
+
+  - job_name: 'query-service-dev'
+    metrics_path: '/q/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['petshop-query-service-dev.onrender.com']
+
+  # --- AMBIENTE HOMOL/PROD ---
+  - job_name: 'infra-service'
+    metrics_path: '/metrics'
+    scheme: 'https'
+    static_configs:
       - targets: ['petshop-infra-service.onrender.com']
+
+  - job_name: 'auth-service'
+    metrics_path: '/q/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['petshop-auth-service.onrender.com']
+
+  - job_name: 'registration-service'
+    metrics_path: '/q/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['petshop-registration-service.onrender.com']
+
+  - job_name: 'appointment-service'
+    metrics_path: '/q/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['petshop-appointment-service.onrender.com']
+
+  - job_name: 'query-service'
+    metrics_path: '/q/metrics'
+    scheme: 'https'
+    static_configs:
+      - targets: ['petshop-query-service.onrender.com']
