@@ -1,7 +1,7 @@
-FROM prom/prometheus:v2.51.0
+FROM prom/prometheus:v3.12.0
 
-COPY prometheus.yml /etc/prometheus/prometheus.yml
+USER root
 
-EXPOSE 9090
+COPY prometheus.yml /etc/prometheus/prometheus.yml.template
 
-CMD ["--config.file=/etc/prometheus/prometheus.yml", "--enable-feature=envsubst"]
+ENTRYPOINT ["/bin/sh", "-c", "sed \"s|\\${GRAFANA_TOKEN}|${GRAFANA_TOKEN}|g\" /etc/prometheus/prometheus.yml.template > /etc/prometheus/prometheus.yml && /bin/prometheus --config.file=/etc/prometheus/prometheus.yml"]
