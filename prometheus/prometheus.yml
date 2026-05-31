@@ -7,15 +7,15 @@ remote_write:
       password: ${GRAFANA_TOKEN}
 scrape_configs:
   # --- AMBIENTE DEV ---
-  - job_name: 'auth-service-dev'
+  - job_name: 'infra-service-dev'
     metrics_path: '/q/metrics'
     scheme: 'https'
     static_configs:
-      - targets: ['petshop-auth-service-dev.onrender.com']
+      - targets: ['petshop-infra-dev.onrender.com']
 
   # --- AMBIENTE HOMOL/PROD ---
-  - job_name: 'auth-service-homol'
+  - job_name: 'infra-service'
     metrics_path: '/q/metrics'
     scheme: 'https'
     static_configs:
-      - targets: ['petshop-auth-service.onrender.com']
+      - targets: ['petshop-infra-service.onrender.com']
