@@ -18,6 +18,9 @@ jwt_secrets:
       YwIDAQAB
       -----END PUBLIC KEY-----
 
+plugins:
+  - name: prometheus
+
 services:
   - name: auth-service
     url: https://petshop-auth-service.onrender.com
