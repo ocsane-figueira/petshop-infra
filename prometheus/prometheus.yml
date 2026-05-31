@@ -4,7 +4,7 @@ remote_write:
   - url: https://prometheus-prod-40-prod-sa-east-1.grafana.net/api/prom/push
     basic_auth:
       username: 3255140
-      password: "${GRAFANA_TOKEN}"
+      password: ${GRAFANA_TOKEN}
 scrape_configs:
   # --- AMBIENTE DEV ---
   - job_name: 'infra-service-dev'
